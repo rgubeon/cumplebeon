@@ -187,6 +187,38 @@ main {
 #no { position: absolute; left: 62%; top: 50%; transform: translateY(-50%); background: linear-gradient(#ff8a8a, #c00); transition: left .15s, top .15s; }
 #respuesta { font-weight: 700; min-height: 1.4em; color: var(--red); margin: 0; }
 
+.apuntarse, .ya { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.apuntarse label { font-weight: 700; font-size: 18px; }
+.fila { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; width: 100%; }
+#nombre {
+  flex: 1 1 200px; min-width: 0; max-width: 340px;
+  font-family: var(--font-hand); font-size: 30px; color: var(--blue);
+  padding: 6px 12px; border: 4px inset #bbb; background: #ffffe0;
+}
+#nombre:focus-visible { outline: 4px dashed var(--red); outline-offset: 2px; }
+.aviso { margin: 0; min-height: 1.2em; color: var(--red); font-weight: 700; }
+.ya p { margin: 0; font-size: 20px; }
+.ya b { font-family: var(--font-hand); font-size: 32px; color: var(--blue); }
+
+/* lista VIP: hoja de libreta */
+.lista { display: flex; flex-direction: column; align-items: center; gap: 18px; }
+.lista-titulo { font-size: clamp(38px, 8vw, 76px); color: var(--yellow); -webkit-text-stroke: 2px var(--red); text-shadow: 3px 3px 0 var(--red), 6px 6px 0 #000; }
+.libreta {
+  width: min(560px, 100%); position: relative;
+  background-color: var(--paper);
+  background-image: linear-gradient(90deg, transparent 52px, var(--red) 52px 54px, transparent 54px), repeating-linear-gradient(transparent 0 38px, #8ec5ff 38px 40px);
+  padding: 18px 18px 26px 66px;
+  transform: rotate(1.5deg);
+  box-shadow: -10px 12px 0 #000;
+}
+.cuantos { margin: 0 0 6px; font-weight: 700; color: var(--red); }
+#lista { margin: 0; padding-left: 26px; font-family: var(--font-hand); font-size: 30px; line-height: 40px; color: var(--blue); }
+#lista li { overflow-wrap: anywhere; }
+#lista li:nth-child(odd) { transform: rotate(-1deg); }
+#lista li:nth-child(3n) { color: #b0006a; }
+#lista li .yo { font-family: var(--font-comic); font-size: 14px; background: var(--lime); color: #000; padding: 1px 6px; margin-left: 6px; vertical-align: middle; }
+#lista li button { margin-left: 8px; font-size: 14px; padding: 0 6px; cursor: pointer; vertical-align: middle; }
+
 /* pie */
 footer { display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; }
 .passion { font-family: var(--font-comic); font-style: italic; font-size: clamp(26px, 6vw, 40px); background: linear-gradient(90deg, #f00, #f80, #ff0, #0f0, #0ff, #00f, #f0f); padding: 12px 18px; color: #000; transform: rotate(1deg); }
@@ -329,6 +361,30 @@ footer { display: flex; flex-direction: column; align-items: center; gap: 14px; 
         <button class="btn" id="no" tabindex="-1">NO</button>
       </div>
       <p id="respuesta" role="status"></p>
+      <form id="apuntarse" class="apuntarse" hidden novalidate>
+        <label for="nombre">Escribe tu nombre (el de verdad, no «tu crush»)</label>
+        <div class="fila">
+          <input id="nombre" name="nombre" type="text" maxlength="40" autocomplete="given-name" placeholder="Ej: Paco Ramírez">
+          <button class="btn" type="submit" id="guardar">¡APÚNTAME!</button>
+        </div>
+        <p id="aviso-form" class="aviso" role="alert"></p>
+      </form>
+      <div id="ya" class="ya" hidden>
+        <p>Estás en la lista como <b id="ya-nombre"></b> ✅</p>
+        <div class="fila">
+          <button type="button" class="btn95" id="cambiar">Cambiar nombre</button>
+          <button type="button" class="btn95" id="borrarme">Desapuntarme (traición)</button>
+          <button type="button" class="btn95" id="otro">Apuntar a alguien más ➕</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="lista" aria-labelledby="lista-titulo">
+    <h3 class="wordart lista-titulo" id="lista-titulo">Lista VIP</h3>
+    <div class="libreta">
+      <p class="cuantos" id="cuantos">Cargando la lista…</p>
+      <ol id="lista"></ol>
     </div>
   </section>
 
@@ -342,8 +398,47 @@ footer { display: flex; flex-direction: column; align-items: center; gap: 14px; 
 </main>
 
 <button id="musica" hidden aria-pressed="true">🔊 Música: SÍ</button>
-<audio id="audio" src="assets/cumple.mp3" loop preload="auto"></audio>
+<audio id="audio" src="assets/fiesta.mp3" loop preload="auto"></audio>
 
+<script>
+(() => {
+  if (window.claude) return;
+  const KEY = 'cumple-rafa-karen-asistentes';
+  const KEY_YO = 'cumple-rafa-karen-yo';
+  const nuevoId = () => 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  let memoria = {};
+  const leer = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return memoria; } };
+  const guardar = o => { memoria = o; try { localStorage.setItem(KEY, JSON.stringify(o)); } catch {} };
+  let uid; try { uid = localStorage.getItem(KEY_YO); } catch {}
+  if (!uid) { uid = nuevoId(); try { localStorage.setItem(KEY_YO, uid); } catch {} }
+  const subs = new Set();
+  const snap = () => {
+    const docs = Object.entries(leer())
+      .sort((a, b) => (a[1].ts || 0) - (b[1].ts || 0))
+      .map(([id, v]) => ({ id, exists: true, data: () => v, metadata: { fromCache: false, hasPendingWrites: false } }));
+    return { docs, size: docs.length, empty: docs.length === 0 };
+  };
+  const avisar = () => { const s = snap(); subs.forEach(f => f(s)); };
+  addEventListener('storage', e => { if (e.key === KEY) avisar(); });
+  const coleccion = {
+    orderBy() { return coleccion; },
+    onSnapshot(f) { subs.add(f); setTimeout(() => f(snap()), 0); return () => subs.delete(f); },
+    doc(id) {
+      return {
+        set: async d => { const o = leer(); o[id] = d; guardar(o); avisar(); },
+        delete: async () => { const o = leer(); delete o[id]; guardar(o); avisar(); }
+      };
+    }
+  };
+  const user = {
+    id: async () => uid,
+    isOwner: async () => true,
+    can: async () => true,
+    nuevaPersona: () => { uid = nuevoId(); try { localStorage.setItem(KEY_YO, uid); } catch {} return uid; }
+  };
+  window.claude = { use: async n => n === 'db' ? { collection: () => coleccion } : n === 'user' ? user : null };
+})();
+</script>
 <script>
 (() => {
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -418,10 +513,150 @@ footer { display: flex; flex-direction: column; align-items: center; gap: 14px; 
   no.addEventListener('pointerenter', huir);
   no.addEventListener('pointerdown', huir);
   no.addEventListener('click', huir);
+
+  // Lista de asistentes compartida (db): un documento por persona, asistentes/<id>
+  const form = document.getElementById('apuntarse');
+  const inputNombre = document.getElementById('nombre');
+  const avisoForm = document.getElementById('aviso-form');
+  const ya = document.getElementById('ya');
+  const yaNombre = document.getElementById('ya-nombre');
+  const listaEl = document.getElementById('lista');
+  const cuantosEl = document.getElementById('cuantos');
+  const st = { db: null, uid: null, owner: false, writable: true, docs: [], mio: null, cargado: false, quiereSi: false };
+
+  const limpiar = s => s.replace(/\s+/g, ' ').trim().slice(0, 40);
+
+  function pintarLista() {
+    listaEl.textContent = '';
+    if (!st.db) { cuantosEl.textContent = 'La lista solo aparece al abrir la invitación en Claude con tu cuenta.'; return; }
+    if (!st.cargado) { cuantosEl.textContent = 'Cargando la lista…'; return; }
+    const n = st.docs.length;
+    cuantosEl.textContent = n === 0 ? 'Nadie apuntado todavía. Sé el primero 🏆'
+      : n === 1 ? '1 valiente apuntado' : n + ' valientes apuntados (+ Rafa y Karen, obvio)';
+    for (const d of st.docs) {
+      const li = document.createElement('li');
+      li.appendChild(document.createTextNode(d.nombre));
+      if (d.id === st.uid) {
+        const yo = document.createElement('span'); yo.className = 'yo'; yo.textContent = 'tú';
+        li.appendChild(yo);
+      } else if (st.owner) {
+        const x = document.createElement('button');
+        x.type = 'button'; x.textContent = '✕'; x.setAttribute('aria-label', 'Quitar a ' + d.nombre);
+        x.addEventListener('click', () => {
+          x.disabled = true;
+          st.db.collection('asistentes').doc(d.id).delete().catch(() => { x.disabled = false; });
+        });
+        li.appendChild(x);
+      }
+      listaEl.appendChild(li);
+    }
+  }
+
+  function pintarRsvp() {
+    if (!st.quiereSi) return;
+    if (!st.db) {
+      form.hidden = true; ya.hidden = true;
+      respuesta.textContent = '¡ESO ES! Para salir en la lista abre la invitación con tu cuenta de Claude.';
+      return;
+    }
+    if (st.mio) {
+      form.hidden = true; ya.hidden = false;
+      yaNombre.textContent = st.mio.nombre;
+      respuesta.textContent = '¡ESO ES! Nos vemos el 3 a las 15:00 🎉';
+    } else if (!st.writable) {
+      form.hidden = true; ya.hidden = true;
+      respuesta.textContent = 'Tu acceso solo deja mirar. Pide a Israel que te dé permiso de colaborador para apuntarte.';
+    } else {
+      ya.hidden = true;
+      if (form.hidden) { form.hidden = false; inputNombre.focus(); }
+      respuesta.textContent = '¡ESO ES! Ahora pon tu nombre 👇';
+    }
+  }
+
   si.addEventListener('click', () => {
-    respuesta.textContent = '¡ESO ES! Nos vemos el 3 a las 15:00 🎉';
-    if (!reduce) lluvia(45);
+    st.quiereSi = true;
+    if (!reduce) lluvia(25);
+    pintarRsvp();
   });
+
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    const nombre = limpiar(inputNombre.value);
+    if (nombre.length < 2) { avisoForm.textContent = 'Pon un nombre de al menos 2 letras.'; inputNombre.focus(); return; }
+    if (!st.db || !st.uid) { avisoForm.textContent = 'No se puede guardar: abre la invitación en Claude con tu cuenta.'; return; }
+    const btn = document.getElementById('guardar');
+    btn.disabled = true; avisoForm.textContent = '';
+    try {
+      await st.db.collection('asistentes').doc(st.uid).set({ nombre, ts: st.mio?.ts ?? Date.now() });
+      st.mio = { id: st.uid, nombre, ts: st.mio?.ts ?? Date.now() };
+      inputNombre.value = '';
+      if (!reduce) lluvia(45);
+      pintarRsvp();
+    } catch (err) {
+      if (err && err.code === 'invalid_argument') {
+        st.writable = false; form.hidden = true;
+        respuesta.textContent = 'Tu acceso solo deja mirar. Pide a Israel que te dé permiso de colaborador para apuntarte.';
+      } else if (err && err.code === 'quota_exceeded') {
+        avisoForm.textContent = 'La lista está llena. Avisa a Israel.';
+      } else {
+        avisoForm.textContent = 'No se ha podido guardar. Prueba otra vez en unos segundos.';
+      }
+    } finally { btn.disabled = false; }
+  });
+
+  document.getElementById('cambiar').addEventListener('click', () => {
+    ya.hidden = true; form.hidden = false;
+    inputNombre.value = st.mio ? st.mio.nombre : '';
+    inputNombre.focus();
+  });
+
+  document.getElementById('borrarme').addEventListener('click', async () => {
+    if (!st.db || !st.uid) return;
+    const b = document.getElementById('borrarme'); b.disabled = true;
+    try {
+      await st.db.collection('asistentes').doc(st.uid).delete();
+      st.mio = null;
+      respuesta.textContent = 'Te has borrado. Rafa y Karen lo han visto todo 👀';
+      ya.hidden = true; form.hidden = false;
+    } catch { respuesta.textContent = 'No se ha podido borrar. Prueba otra vez.'; }
+    finally { b.disabled = false; }
+  });
+
+  document.getElementById('otro').addEventListener('click', async () => {
+    const u = await window.claude.use('user');
+    if (!u || !u.nuevaPersona) return;
+    st.uid = u.nuevaPersona(); st.mio = null;
+    inputNombre.value = '';
+    ya.hidden = true; form.hidden = false; inputNombre.focus();
+    respuesta.textContent = '¡Otro más! Pon su nombre 👇';
+    pintarLista();
+  });
+
+  pintarLista();
+  (async () => {
+    const c = window.claude;
+    if (!c || typeof c.use !== 'function') { pintarLista(); return; }
+    const [db, user] = await Promise.all([c.use('db'), c.use('user')]);
+    if (!db) { pintarLista(); pintarRsvp(); return; }
+    st.db = db;
+    if (user) {
+      st.uid = await user.id();
+      st.owner = await user.isOwner();
+      const w = await user.can('data.write');
+      if (w === false) st.writable = false;
+    }
+    if (!st.uid) st.writable = false;
+    pintarLista(); pintarRsvp();
+    db.collection('asistentes').orderBy('ts').onSnapshot(snap => {
+      st.docs = snap.docs.map(d => {
+        const v = d.data() || {};
+        return { id: d.id, nombre: typeof v.nombre === 'string' ? limpiar(v.nombre) : '???', ts: v.ts };
+      }).filter(d => d.nombre);
+      st.mio = st.docs.find(d => d.id === st.uid) || null;
+      st.cargado = true;
+      pintarLista(); pintarRsvp();
+    }, () => { cuantosEl.textContent = 'No se ha podido cargar la lista. Recarga la página.'; });
+  })();
 
   // Lluvia de emojis
   function lluvia(n) {

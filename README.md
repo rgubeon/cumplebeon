@@ -15,11 +15,20 @@ Web estática, sin build. Abre `index.html` o publícala con GitHub Pages:
 
 La música arranca al pulsar «Aceptar» en la ventana inicial (los navegadores bloquean el audio automático).
 
+## Lista VIP
+
+Al pulsar «SÍ» se pide el nombre y se añade a la lista. Se puede cambiar el nombre, desapuntarse,
+apuntar a más gente y quitar a cualquiera con la ✕.
+
+Los nombres se guardan en el `localStorage` del navegador: sobreviven a recargas,
+pero cada navegador tiene su propia lista. Para una lista compartida entre todos haría falta un backend
+(Supabase, Firebase…); la única pieza a cambiar es el bloque `<script>` que define `window.claude`.
+
 ## Estructura
 
 ```
-index.html        # todo el HTML, CSS y JS
+index.html         # todo el HTML, CSS y JS
 assets/rafa.png
 assets/karen.png
-assets/cumple.mp3 # música de fondo
+assets/fiesta.mp3  # música de fondo
 ```
